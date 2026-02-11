@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 
 import os
 import glob
@@ -299,7 +301,7 @@ def build_matrix_df(rows: List[Tuple[str, Dict[int, float]]],
         ordered.extend(["ACUM", "ACUM%"])
     return df[ordered]
 
-def style_result_rows(df: pd.DataFrame, result_labels: List[str]) -> pd.io.formats.style.Styler:
+def style_result_rows(df: pd.DataFrame, result_labels: List[str]) -> object:
     def _styler(row):
         styles = [""] * len(row)
         label = str(row.get("Linha", ""))
@@ -316,7 +318,7 @@ def style_result_rows(df: pd.DataFrame, result_labels: List[str]) -> pd.io.forma
         return styles
     return df.style.apply(_styler, axis=1)
 
-def apply_formats(styler, meses_nums: List[int]) -> pd.io.formats.style.Styler:
+def apply_formats(styler, meses_nums: List[int]) -> object:
     fmt = {}
     for m in meses_nums:
         pt = MES_NUM_TO_PT[m]
@@ -405,21 +407,11 @@ def despesas_e_historicos(dre_det: pd.DataFrame,
     agg[pct_label] = (agg["Valor"] / denom * 100.0) if denom != 0 else 0.0
     agg = agg.sort_values("Valor", ascending=False)
 
-    n_agg = int(len(agg))
-    if n_agg <= 0:
-        st.info("Sem despesas para detalhar.")
-        return
+    top_max = min(80, max(5, len(agg)))
+    top_def = min(15, top_max)
+    topn = st.slider("Top N (despesas)", 5, top_max, top_def, key=f"{key_prefix}_topn_{_norm_txt(linha_sel)}")
 
-    # Se tiver poucas despesas (<=5), evita erro do Streamlit (min==max)
-    if n_agg <= 5:
-        topn = n_agg
-        st.caption(f"Mostrando todas as {n_agg} despesas (não há Top N suficiente para slider).")
-    else:
-        top_max = min(80, n_agg)
-        top_def = min(15, top_max)
-        topn = st.slider("Top N (despesas)", 5, top_max, top_def, key=f"{key_prefix}_topn_{_norm_txt(linha_sel)}")
-
-    agg_top = agg.head(int(topn)).copy()
+    agg_top = agg.head(topn).copy()
 
     c1, c2 = st.columns([1.2, 1])
     with c1:
@@ -480,7 +472,7 @@ def despesas_e_historicos(dre_det: pd.DataFrame,
             )
 
     with tab3:
-        cols = [c for c in ["DTA.PAG", "LOJA", "CONTA DE RESULTADO", "DESPESA", "FAVORECIDO", "DUPLICATA", "HISTÓRICO", "VAL.PAG"] if c in raw_sel.columns]
+        cols = [c for c in ["DTA.PAG", "CONTA DE RESULTADO", "DESPESA", "FAVORECIDO", "DUPLICATA", "HISTÓRICO", "VAL.PAG"] if c in raw_sel.columns]
         view = raw_sel[cols].copy() if cols else raw_sel.copy()
         if "VAL.PAG" in view.columns:
             st.dataframe(view.style.format({"VAL.PAG": lambda x: f"R$ {format_brl(to_num(x))}"}).hide(axis="index"), use_container_width=True)
@@ -682,7 +674,6 @@ def dfc_page():
     margem_bruta_by_m = {m: receb_by_m[m] - compras_liq_by_m[m] for m in range(1, 13)}
 
     # contas da aba DRE (sem shift no DFC)
-    fornec_by_m = _sum_dre_group_by_month(dre_det, ano_ref, lojas_sel, "00012 -")
     ded_by_m    = _sum_dre_group_by_month(dre_det, ano_ref, lojas_sel, "00004 -")
     pes_by_m    = _sum_dre_group_by_month(dre_det, ano_ref, lojas_sel, "00006 -")
     adm_by_m    = _sum_dre_group_by_month(dre_det, ano_ref, lojas_sel, "00007 -")
@@ -694,7 +685,7 @@ def dfc_page():
     op_by_m     = _sum_dre_group_by_month(dre_det, ano_ref, lojas_sel, "00017 -")
 
     def _sum_costs(m):
-        return (fornec_by_m[m] + ded_by_m[m] + pes_by_m[m] + adm_by_m[m] + com_by_m[m] + fin_by_m[m] +
+        return (ded_by_m[m] + pes_by_m[m] + adm_by_m[m] + com_by_m[m] + fin_by_m[m] +
                 imo_by_m[m] + inv_by_m[m] + ret_by_m[m] + op_by_m[m])
 
     saldo_oper_by_m = {m: margem_bruta_by_m[m] - _sum_costs(m) for m in range(1, 13)}
@@ -706,7 +697,6 @@ def dfc_page():
         ("DEVOLUÇÕES (MÊS ANTERIOR)", devol_by_m),
         ("COMPRAS LÍQ", compras_liq_by_m),
         ("MARGEM BRUTA", margem_bruta_by_m),
-        ("FORNECEDORES", fornec_by_m),
         ("DEDUÇÕES (IMPOSTOS SOBRE VENDAS)", ded_by_m),
         ("DESPESAS COM PESSOAL", pes_by_m),
         ("DESPESAS ADMINISTRATIVAS", adm_by_m),
@@ -732,7 +722,6 @@ def dfc_page():
     linha_sel = drill_kpis(df, meses_nums, receb_periodo, "Recebimento", key_prefix="dfc")
 
     group_def = {
-        "FORNECEDORES": {"prefix": "00012 -", "shift_next": False},
         "DEDUÇÕES (IMPOSTOS SOBRE VENDAS)": {"prefix": "00004 -", "shift_next": False},
         "DESPESAS COM PESSOAL": {"prefix": "00006 -", "shift_next": False},
         "DESPESAS ADMINISTRATIVAS": {"prefix": "00007 -", "shift_next": False},
