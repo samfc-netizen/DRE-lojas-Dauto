@@ -239,7 +239,14 @@ def _sheet_month_value_map(df: pd.DataFrame, ano_ref: int, lojas_sel: List[str])
     out = {m: 0.0 for m in range(1, 13)}
     for m in range(1, 13):
         dm = d[d["_mes"] == m]
-        out[m] = float(dm[use_cols].applymap(to_num).to_numpy().sum()) if not dm.empty else 0.0
+        if dm.empty:
+            out[m] = 0.0
+            continue
+
+        # Compatível com versões novas do pandas, onde DataFrame.applymap
+        # pode não estar disponível da mesma forma.
+        vals = dm[use_cols].apply(lambda col: col.map(to_num)).to_numpy()
+        out[m] = float(vals.sum())
     return out
 
 def _sum_dre_group_by_month(dre_det: pd.DataFrame, ano: int, lojas_sel: List[str], prefix: str) -> Dict[int, float]:
